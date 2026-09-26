@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { ContentProvider, useContent } from './content.jsx';
 import { Reveal, TiltCard, SectionHeading, LinkRow } from './components/ui.jsx';
 
@@ -6,6 +6,43 @@ import { Reveal, TiltCard, SectionHeading, LinkRow } from './components/ui.jsx';
 const HeroScene = lazy(() => import('./components/HeroScene.jsx'));
 // The login and admin pages are only downloaded when someone opens them.
 const AdminApp = lazy(() => import('./admin/AdminApp.jsx'));
+// Hidden mini game, only downloaded once someone finds it.
+const BugHunt = lazy(() => import('./components/BugHunt.jsx'));
+
+const KONAMI = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a'];
+const LOGO_TAPS = 5;
+
+// Opens the game on the Konami code, or when the logo is tapped 5 times in a row.
+function useEasterEgg() {
+  const [open, setOpen] = useState(false);
+  const taps = useRef({ count: 0, last: 0 });
+  useEffect(() => {
+    let pos = 0;
+    const onKey = (e) => {
+      if (e.target.closest?.('input, textarea, [contenteditable="true"]')) return;
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      pos = key === KONAMI[pos] ? pos + 1 : key === KONAMI[0] ? 1 : 0;
+      if (pos === KONAMI.length) {
+        pos = 0;
+        setOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    console.log('%c🐞 Psst, developer: try ↑ ↑ ↓ ↓ ← → ← → B A', 'color:#22d3ee;font-weight:bold');
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  const onLogoTap = useCallback(() => {
+    const now = Date.now();
+    const t = taps.current;
+    t.count = now - t.last < 600 ? t.count + 1 : 1;
+    t.last = now;
+    if (t.count >= LOGO_TAPS) {
+      t.count = 0;
+      setOpen(true);
+    }
+  }, []);
+  return { open, close: useCallback(() => setOpen(false), []), onLogoTap };
+}
 
 const NAV = [
   ['about', 'About'],
@@ -24,7 +61,7 @@ function webglAvailable() {
   }
 }
 
-function Nav() {
+function Nav({ onLogoTap }) {
   const { profile } = useContent();
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -40,7 +77,14 @@ function Nav() {
 
   return (
     <header className={`nav ${scrolled ? 'nav--scrolled' : ''}`}>
-      <a href="#top" className="brand" onClick={() => setOpen(false)}>
+      <a
+        href="#top"
+        className="brand"
+        onClick={() => {
+          setOpen(false);
+          onLogoTap();
+        }}
+      >
         <span className="brand-mark" aria-hidden="true" />
         {profile.name}
       </a>
@@ -280,9 +324,10 @@ function Site() {
   useEffect(() => {
     document.title = `${profile.name} · ${profile.role}`;
   }, [profile.name, profile.role]);
+  const egg = useEasterEgg();
   return (
     <>
-      <Nav />
+      <Nav onLogoTap={egg.onLogoTap} />
       <main>
         <Hero />
         <About />
@@ -296,6 +341,11 @@ function Site() {
           © {new Date().getFullYear()} {profile.name}. Built with React and Three.js.
         </div>
       </footer>
+      {egg.open && (
+        <Suspense fallback={<div className="bh bh--loading" aria-label="Loading game" />}>
+          <BugHunt onClose={egg.close} />
+        </Suspense>
+      )}
     </>
   );
 }
