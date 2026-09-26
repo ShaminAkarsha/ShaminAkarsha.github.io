@@ -1,9 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { profile, about, projects, research, achievements } from './data.js';
+import { ContentProvider, useContent } from './content.jsx';
 import { Reveal, TiltCard, SectionHeading, LinkRow } from './components/ui.jsx';
 
 // Loaded separately so the text appears instantly while the 3D code downloads.
 const HeroScene = lazy(() => import('./components/HeroScene.jsx'));
+// The login and admin pages are only downloaded when someone opens them.
+const AdminApp = lazy(() => import('./admin/AdminApp.jsx'));
 
 const NAV = [
   ['about', 'About'],
@@ -23,6 +25,7 @@ function webglAvailable() {
 }
 
 function Nav() {
+  const { profile } = useContent();
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
@@ -67,6 +70,7 @@ function Nav() {
 }
 
 function Hero() {
+  const { profile } = useContent();
   const [show3d, setShow3d] = useState(false);
   useEffect(() => setShow3d(webglAvailable()), []);
 
@@ -106,6 +110,7 @@ function Hero() {
 }
 
 function About() {
+  const { profile, about } = useContent();
   return (
     <section id="about" className="section">
       <div className="container">
@@ -113,12 +118,12 @@ function About() {
         <div className="about-grid">
           <Reveal className="about-text">
             {profile.photo && <img className="avatar" src={profile.photo} alt={profile.name} />}
-            {about.paragraphs.map((p, i) => (
+            {about.paragraphs?.map((p, i) => (
               <p key={i}>{p}</p>
             ))}
             <h3 className="mini-title">Professional interests</h3>
             <ul className="interest-list">
-              {about.interests.map((t) => (
+              {about.interests?.map((t) => (
                 <li key={t}>{t}</li>
               ))}
             </ul>
@@ -128,7 +133,7 @@ function About() {
               <TiltCard className="card">
                 <h3 className="mini-title">Education</h3>
                 <ul className="edu-list">
-                  {about.education.map((e) => (
+                  {about.education?.map((e) => (
                     <li key={e.degree}>
                       <strong>{e.degree}</strong>
                       <span>{e.school}</span>
@@ -144,7 +149,7 @@ function About() {
             <Reveal delay={200}>
               <TiltCard className="card">
                 <h3 className="mini-title">Skills</h3>
-                {Object.entries(about.skills).map(([group, items]) => (
+                {Object.entries(about.skills || {}).map(([group, items]) => (
                   <div key={group} className="skill-group">
                     <span className="skill-label">{group}</span>
                     <div className="tags">
@@ -166,6 +171,7 @@ function About() {
 }
 
 function Projects() {
+  const { projects } = useContent();
   return (
     <section id="projects" className="section">
       <div className="container">
@@ -183,7 +189,7 @@ function Projects() {
                 <h3>{p.title}</h3>
                 <p>{p.description}</p>
                 <div className="tags">
-                  {p.tags.map((t) => (
+                  {p.tags?.map((t) => (
                     <span key={t} className="tag">
                       {t}
                     </span>
@@ -200,6 +206,7 @@ function Projects() {
 }
 
 function Research() {
+  const { research } = useContent();
   return (
     <section id="research" className="section">
       <div className="container">
@@ -223,6 +230,7 @@ function Research() {
 }
 
 function Achievements() {
+  const { achievements } = useContent();
   return (
     <section id="achievements" className="section">
       <div className="container">
@@ -245,6 +253,7 @@ function Achievements() {
 }
 
 function Contact() {
+  const { profile } = useContent();
   return (
     <section id="contact" className="section contact">
       <div className="container">
@@ -266,10 +275,11 @@ function Contact() {
   );
 }
 
-export default function App() {
+function Site() {
+  const { profile } = useContent();
   useEffect(() => {
     document.title = `${profile.name} · ${profile.role}`;
-  }, []);
+  }, [profile.name, profile.role]);
   return (
     <>
       <Nav />
@@ -287,5 +297,34 @@ export default function App() {
         </div>
       </footer>
     </>
+  );
+}
+
+// Pages live under "#/..." (e.g. #/login, #/admin) so they work on GitHub Pages,
+// which cannot rewrite URLs. Plain "#about" style links still scroll the home page.
+function useRoute() {
+  const read = () => (window.location.hash.startsWith('#/') ? window.location.hash.slice(1) : '/');
+  const [route, setRoute] = useState(read);
+  useEffect(() => {
+    const onHash = () => setRoute(read());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  return route;
+}
+
+export default function App() {
+  const route = useRoute();
+  if (route.startsWith('/login') || route.startsWith('/admin')) {
+    return (
+      <Suspense fallback={<div className="page-loading" aria-label="Loading" />}>
+        <AdminApp route={route} />
+      </Suspense>
+    );
+  }
+  return (
+    <ContentProvider>
+      <Site />
+    </ContentProvider>
   );
 }
