@@ -16,15 +16,22 @@ create table if not exists public.site_admins (
 alter table public.site_content enable row level security;
 alter table public.site_admins enable row level security;
 
-create or replace function public.is_site_admin()
+-- Admin check lives in a schema the API doesn't expose, so it can't be called over REST.
+create schema if not exists private;
+revoke all on schema private from public, anon;
+grant usage on schema private to authenticated;
+
+create or replace function private.is_site_admin()
 returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = ''
 as $$
-  select exists (select 1 from public.site_admins where user_id = auth.uid());
+  select exists (select 1 from public.site_admins where user_id = (select auth.uid()));
 $$;
+revoke all on function private.is_site_admin() from public, anon;
+grant execute on function private.is_site_admin() to authenticated;
 
 drop policy if exists "Anyone can read content" on public.site_content;
 create policy "Anyone can read content" on public.site_content
@@ -32,19 +39,19 @@ create policy "Anyone can read content" on public.site_content
 
 drop policy if exists "Admins can insert content" on public.site_content;
 create policy "Admins can insert content" on public.site_content
-  for insert to authenticated with check (public.is_site_admin());
+  for insert to authenticated with check ((select private.is_site_admin()));
 
 drop policy if exists "Admins can update content" on public.site_content;
 create policy "Admins can update content" on public.site_content
-  for update to authenticated using (public.is_site_admin()) with check (public.is_site_admin());
+  for update to authenticated using ((select private.is_site_admin())) with check ((select private.is_site_admin()));
 
 drop policy if exists "Admins can delete content" on public.site_content;
 create policy "Admins can delete content" on public.site_content
-  for delete to authenticated using (public.is_site_admin());
+  for delete to authenticated using ((select private.is_site_admin()));
 
 drop policy if exists "Admins can see themselves" on public.site_admins;
 create policy "Admins can see themselves" on public.site_admins
-  for select to authenticated using (user_id = auth.uid());
+  for select to authenticated using (user_id = (select auth.uid()));
 
 -- After creating your user (Authentication > Users > Add user), make it an admin.
 -- Replace the email below with the one you used, then run this line on its own.

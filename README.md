@@ -25,30 +25,25 @@ GitHub Pages only serves static files, so the database and login are provided by
 Anyone can read the content; only accounts listed in `site_admins` can change it,
 enforced by row-level security in the database.
 
-One-time setup:
+The project URL and public anon key are in `.env.production`, which the build
+reads. The database tables and security rules come from `supabase/schema.sql`
+(already applied to the connected project).
 
-1. Create a project at [supabase.com](https://supabase.com) (New project; any name,
-   pick a region near you, save the database password somewhere safe).
-2. **SQL Editor > New query**: paste all of `supabase/schema.sql` and click **Run**.
-3. **Authentication > Sign In / Providers**: turn **off** "Allow new users to sign up",
-   so nobody else can create an account.
-4. **Authentication > Users > Add user > Create new user**: enter your email and a
-   strong password, and tick "Auto Confirm User".
-5. **SQL Editor**: run the last line of `schema.sql` with your email filled in, to
-   make that user an admin:
+To give yourself edit access (one time):
+
+1. Supabase dashboard > **Authentication > Users > Add user > Create new user**:
+   your email and a strong password, with "Auto Confirm User" ticked.
+2. **SQL Editor**: run this with your email filled in:
    ```sql
    insert into public.site_admins (user_id) select id from auth.users where email = 'you@example.com';
    ```
-6. **Project Settings > API** (or **Data API**): copy the **Project URL** and the
-   **anon public** key. Never use the `service_role` / secret key in this site.
-7. On GitHub: repo **Settings > Secrets and variables > Actions > Variables** tab,
-   add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` with those two values, then
-   re-run the deploy workflow (Actions > Deploy to GitHub Pages > Run workflow).
-8. Open `https://<your-site>/#/login`, sign in, and save each section once to move
+3. **Authentication > Sign In / Providers**: turn off "Allow new users to sign up".
+4. Open `https://<your-site>/#/login`, sign in, and save each section once to move
    it into the database.
 
-For local development, copy `.env.example` to `.env.local` and fill in the same two
-values.
+Using a different Supabase project: run `supabase/schema.sql` in its SQL Editor,
+then put its Project URL and anon key in `.env.production`. For local development,
+`npm run dev` uses `.env.local` if present (copy `.env.example`).
 
 Notes:
 - The anon key is meant to be public; the row-level security policies are what
@@ -57,8 +52,7 @@ Notes:
   site keeps working from `src/data.js`; restore the project from the Supabase
   dashboard to get your edits back.
 - Password reset: use Authentication > Users in the Supabase dashboard.
-- Moving to Azure later: the build still needs only the two `VITE_SUPABASE_*`
-  variables, so Supabase keeps working from Azure Static Web Apps too.
+- Moving to Azure later: nothing changes; the Supabase settings are part of the build.
 
 ## Run locally
 
